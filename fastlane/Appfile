@@ -1,0 +1,4 @@
+
+app_identifier "com.gefix.app" # The bundle identifier of your app
+apple_id "okuta.omeiza@gmail.com"# Your Apple email address
+team_id "2X357YHN77" # Developer Portal Team ID

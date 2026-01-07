@@ -1,28 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Font from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import * as React from 'react';
+import { useState, useEffect } from 'react';
+
+// 1. Prevent auto-hide globally so it stays up during font AND token loading
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* ignore error on web */
+});
 
 export default function useCachedResources() {
-  const [isLoadingComplete, setLoadingComplete] = React.useState(false);
+  const [isLoadingComplete, setLoadingComplete] = useState(false);
 
-  // Load any resources or data that we need prior to rendering the app
-  React.useEffect(() => {
+  useEffect(() => {
     async function loadResourcesAndDataAsync() {
       try {
-        SplashScreen.preventAutoHideAsync();
-
-        // Load fonts
+        // Load fonts required for 2026 UI components
         await Font.loadAsync({
           ...Ionicons.font,
           'space-mono': require('../assets/fonts/SpaceMono-Regular.ttf'),
         });
       } catch (e) {
-        // We might want to provide this error information to an error reporting service
-        console.warn(e);
+        console.warn('Font loading error:', e);
       } finally {
         setLoadingComplete(true);
-        SplashScreen.hideAsync();
+        // REMOVED: SplashScreen.hideAsync() - we will hide it in RootLayout instead
       }
     }
 

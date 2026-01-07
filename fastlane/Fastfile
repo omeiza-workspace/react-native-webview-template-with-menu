@@ -1,0 +1,186 @@
+require "dotenv"
+  # Dotenv.load(".env.secret")
+
+# -------------------------------------------------
+# Global
+# -------------------------------------------------
+before_all do
+  app_store_connect_api_key(
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    key_content: ENV["ASC_KEY_CONTENT"],
+    is_key_content_base64: true
+  )
+end
+
+# -------------------------------------------------
+# App Creation (ONE-TIME)
+# -------------------------------------------------
+desc "Create app in App Store Connect & Developer Portal"
+lane :create_app do
+  produce
+end
+
+platform :ios do
+  # before_all do
+  #   Dotenv.load(".env.ios")
+  # end
+
+  # -------------------------------------------------
+  # Signing
+  # -------------------------------------------------
+  desc "Sync signing certificates & profiles"
+  lane :signing do
+    match(
+      type: "appstore",
+      readonly: true
+    )
+  end
+
+  # -------------------------------------------------
+  # Build
+  # -------------------------------------------------
+  desc "Build App Store archive"
+  lane :build do
+    signing
+
+    build_ios_app(
+      workspace: "App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      clean: true
+    ) 
+  end
+
+  # -------------------------------------------------
+  # TestFlight
+  # -------------------------------------------------
+  desc "Build & upload to TestFlight"
+  lane :beta do
+    build
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  # -------------------------------------------------
+  # Release (AUTOMATIC ON APPROVAL)
+  # -------------------------------------------------
+  desc "Submit app for App Store review and auto-release"
+  lane :release do
+    # ensure_git_status_clean
+    # ensure_git_branch(branch: "main")
+
+    build
+
+    upload_to_app_store(
+      submit_for_review: true,
+      automatic_release: true,
+      # skip_metadata: true,
+      skip_screenshots: true,
+      force: true,
+      run_precheck_before_submit: true
+    )
+  end
+
+  desc "Validate App Store Connect metadata completeness (no upload)"
+  lane :validate_metadata do
+    UI.header("Validating App Store Connect metadata")
+
+    # Find the app by bundle ID
+    app = Spaceship::ConnectAPI::App.find(ENV["PRODUCE_APP_IDENTIFIER"])
+    UI.user_error!("App not found in App Store Connect") unless app
+    UI.success("App found: #{app.bundle_id}")
+
+    # Get edit App Store versions (currently editable versions)
+    versions = Spaceship::ConnectAPI::AppStoreVersion.all(
+      app_id: app.id,
+      includes: "appStoreVersionLocalizations,appStoreReviewDetail,appStorePrivacyDetails"
+    )
+
+    UI.user_error!("No App Store version found") if versions.empty?
+
+    # Pick the version to validate (use ENV PRODUCE_VERSION if exists)
+    version = versions.find { |v| v.version_string == ENV["PRODUCE_VERSION"] } || versions.first
+
+    UI.success("Validating version: #{version.version_string}")
+
+    # 1️⃣ Localizations
+    localizations = version.get_app_store_version_localizations
+    UI.user_error!("No localizations found") if localizations.empty?
+
+    loc = localizations.first
+    UI.user_error!("Missing app name") if loc.name.to_s.strip.empty?
+    UI.user_error!("Missing description") if loc.description.to_s.strip.empty?
+    UI.user_error!("Missing keywords") if loc.keywords.to_s.strip.empty?
+
+    UI.success("Localization metadata OK")
+
+    # 2️⃣ Privacy details
+    privacy = version.get_app_store_privacy_details
+    UI.user_error!("App privacy details not completed") if privacy.nil?
+
+    UI.success("Privacy details OK")
+
+    # 3️⃣ Export compliance
+    UI.user_error!("Export compliance not set") if version.uses_encryption.nil?
+    UI.success("Export compliance OK")
+
+    # 4️⃣ Review information
+    review = version.get_app_store_review_detail
+    UI.user_error!("Missing review contact email") if review.contact_email.to_s.strip.empty?
+
+    if review.demo_account_required && review.demo_account_name.to_s.strip.empty?
+      UI.user_error!("Demo account required but missing")
+    end
+
+    UI.success("Review information OK")
+    UI.success("App Store Connect metadata completeness PASSED")
+  end
+
+  # desc "Automated screenshots for available iPhone devices, framed for App Store"
+  # lane :capture_screenshots do
+  #   UI.header("Starting automated screenshots")
+
+  #   devices = [
+  #     "iPhone 17 Pro Max",   # 6.7" display (App Store 6.5" equivalent)
+  #     "iPhone 17 Pro",       # 6.1"
+  #     "iPhone 17"            # 6.1"
+  #   ]
+
+  #   languages = ["en-US"]
+
+  #   snapshot(
+  #     devices: devices,
+  #     languages: languages,
+  #     scheme: "App",
+  #     clean: true,
+  #     erase_simulator: true,
+  #     reinstall_app: true,
+  #     output_directory: "fastlane/screenshots"
+  #   )
+
+  #   frame_screenshots(
+  #     path: "fastlane/screenshots",
+  #     devices: devices,
+  #     languages: languages,
+  #     overwrite: true
+  #   )
+
+  #   UI.success("Screenshots captured and framed successfully!")
+  # end
+
+end
+
+
+
+
+
+
+
+
+
+
+

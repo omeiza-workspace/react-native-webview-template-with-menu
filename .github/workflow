@@ -1,0 +1,86 @@
+name: Expo CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ----------------------------
+  # Android Build & Deploy
+  # ----------------------------
+  android:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+      EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Copy environment variables
+        run: cp .env.example .env
+
+      - name: Build Android Docker image
+        run: docker compose build --profile android-prod
+
+      - name: Run Android build
+        run: docker compose run --rm android-build
+
+      - name: Upload APK/AAB artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-artifact
+          path: app/build/outputs/
+
+  # ----------------------------
+  # iOS Build & Deploy (macOS)
+  # ----------------------------
+  ios:
+    runs-on: macos-latest
+    env:
+      NODE_ENV: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Ruby & Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2
+
+      - name: Install Node & Expo CLI
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          npm install -g expo-cli
+          bundle install
+
+      - name: Set up Fastlane environment
+        run: |
+          gem install fastlane --no-document
+          mkdir -p ~/fastlane_certs
+        env:
+          FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+
+      - name: Run iOS Fastlane build
+        run: fastlane ios build
+        env:
+          FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-artifact
+          path: app/build/ios/ipa

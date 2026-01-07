@@ -1,31 +1,105 @@
 {
   "expo": {
-    "name": "React Native Webview Template with Menu",
-    "slug": "reactnatviewebviewtemplate",
+    "name": "GEFIX",
+    "slug": "gefix-t650o5oddrmac2qxv0jle",
+    "scheme": "gefix",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "reactnatviewebviewtemplate",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "icon": "assets/images/icon.png",
+    "newArchEnabled": true,
+    "experiments": {
+      "tsconfigPaths": true
+    },
     "splash": {
-      "image": "assets/images/splash.png",
-      "resizeMode": "cover",
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "updates": {
-      "fallbackToCacheTimeout": 0
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.gefix.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:ge-fix.com",
+        "applinks:ge-fix.com"
+      ],
+      "infoPlist": {
+        "NSCameraUsageDescription": "Needed for profile photo upload",
+        "NSPhotoLibraryUsageDescription": "Needed for profile photo upload",
+        "NSUserTrackingUsageDescription": "Used to improve analytics and app experience",
+        "UIBackgroundModes": [
+          "remote-notification",
+          "fetch",
+          "remote-notification",
+          "fetch"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
-    "entryPoint": "node_modules/expo/AppEntry.js",
     "android": {
-      "permissions": []
-    }
-  },
-  "displayName": "exampleapp",
-  "name": "React Native Webview Template with Menu"
+      "package": "com.gefix.app",
+      "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "ge-fix.com"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "INTERNET",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-secure-store",
+      [
+        "expo-background-task",
+        {
+          "appleStatusBackground": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "backgroundColor": "#000000"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "APP_URL": "https://www.ge-fix.com",
+      "APP_VERSION": "1.0.0",
+      "eas": {
+        "projectId": "07a7bfcb-20f9-4f4c-91e2-d47b5d8b92e3"
+      }
+    },
+    "owner": "iefe-international"
+  }
 }

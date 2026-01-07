@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "350660542200",
+    "project_id": "gefix-3b87b",
+    "storage_bucket": "gefix-3b87b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:350660542200:android:fc4a6b33ff530b5e42c50d",
+        "android_client_info": {
+          "package_name": "com.gefix.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtwCkREq8_pVp9m2JkH5HaWx8SxLHn6rQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

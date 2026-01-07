@@ -1,34 +1,50 @@
+# Welcome to your Expo app 👋
 
-# React Native Webview Template With Menu
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-This template is to provide a boiler plate in making an application for both iOS and Android utilizing a navigation and displaying webviews per page.
+## Get started
 
-Uses: React Native 0.63, React Navigation 5.0, Typescript
+1. Install dependencies
 
-This project utilized Expo v39 resources and was ejected.  It includes a lot of resources such as location and notification handles autolinked into the project.
+   ```bash
+   npm install
+   ```
 
-Sets up for you: menu title, drawer navigation, tests (with jest), hooks, deep linking, custom font support, splash screen, dark/light mode support.
+2. Start the app
 
-# Preview
+   ```bash
+   npx expo start
+   ```
 
-<img src="preview/ios-home.png" alt="ios home" width="250"/>
-<img src="preview/ios-nav.png" alt="ios nav" width="250"/>
-<img src="preview/android-home.png" alt="android home" width="250"/>
-<img src="preview/android-nav.png" alt="android nav" width="250"/>
+In the output, you'll find options to open the app in a
 
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-# Installation
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-We recommend using `react-native-rename` to rename your project to what you'd like.  Afterwhich, go through the proper procedure for both iOS and Android to change your resource names.
+## Get a fresh project
 
-Simply run a `npm install` on first go around and then for iOS run `pod install` under the `ios` directory.  After, you should be able to run `react-native run ios` or `android` to start up the app right away!
+When you're ready, run:
 
-This README expects you already know how to setup and use `react-native`.
+```bash
+npm run reset-project
+```
 
-## Android
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-I did attempt to remove `expo-location` as if you attempt to deploy to the android play store, it will complain you are request location services and see to provide details as to why.  Though, the app does not use location, the fact it was present in the binary, you wouldn't be able to deploy your app if you were not needing location services.  With this in mind, you'll want to re-add `expo-location` or a similiar location service plugin or use your own.  Since this project was a eject of `expo` it included a lot of handy auto-linked modules.  
+## Learn more
 
-# License
+To learn more about developing your project with Expo, look at the following resources:
 
-[MIT License](https://opensource.org/licenses/MIT)
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+
+## Join the community
+
+Join our community of developers creating universal apps.
+
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.

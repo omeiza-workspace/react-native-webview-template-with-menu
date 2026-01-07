@@ -1,0 +1,13 @@
+GE-Fix is a modern service management app designed to streamline issue tracking, reporting, and resolution for users and service teams.
+
+Key features include real-time updates, task tracking, and a simple, intuitive interface.
+
+GE-Fix is your native iOS companion app for managing service requests efficiently. With GE-Fix, you can:
+
+- Navigate quickly with a native tab bar for core features
+- Receive real-time push notifications for updates and alerts
+- Work offline with a custom offline screen and retry mechanism
+- Upload photos directly using your device camera
+- Enjoy smooth, app-like transitions without page reloads
+
+GE-Fix combines the best of web content with iOS-native performance and functionality, providing an experience beyond a mobile browser.

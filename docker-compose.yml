@@ -1,0 +1,56 @@
+services:
+  # Daily Local Development
+  expo-dev:
+    build:
+      context: .
+      target: dev
+    container_name: expo-dev
+    volumes: 
+        - ./app:/home/dev/app
+        # This "anonymous volume" ensures the container uses its internal node_modules
+        - /home/dev/app/node_modules 
+    ports:
+      - "8081:8081"
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - CHOKIDAR_USEPOLLING=true
+
+  # Local Android Production (Free & Unlimited)
+  android-build-local:
+    build:
+      context: .
+      target: prod
+    container_name: android-builder
+    volumes:
+      - ./app:/home/dev/app
+      - gradle_cache:/home/dev/.gradle
+    environment:
+      - EXPO_TOKEN=${EXPO_TOKEN:-}
+    command: eas build --platform android --local --profile production
+
+  # iOS Production Build (Cloud-based for macOS compliance)
+  ios-build-cloud:
+    build:
+      context: .
+      target: prod
+    container_name: ios-builder
+    volumes: 
+      - .:/home/dev/app
+
+    environment:
+      - EXPO_TOKEN=${EXPO_TOKEN:-}
+    command: eas build --platform ios --profile production --non-interactive
+
+volumes:
+  gradle_cache:
+
+
+# Start Development	docker compose up expo-dev
+# Build Android APK/AAB	docker compose run --rm android-build
+# Build iOS IPA	docker compose run --rm ios-build
+
+# docker compose up expo-dev
+
+# npx expo start --tunnel
+
+# docker compose run --rm android-build eas build --profile development --platform android
