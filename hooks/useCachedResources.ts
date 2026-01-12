@@ -20,10 +20,10 @@ export default function useCachedResources() {
           'space-mono': require('../assets/fonts/SpaceMono-Regular.ttf'),
         });
       } catch (e) {
-        console.warn('Font loading error:', e);
+        console.warn('[Resources] Font loading error:', e);
       } finally {
+        // Set complete even if fonts fail, to prevent "Forever Splash" hang
         setLoadingComplete(true);
-        // REMOVED: SplashScreen.hideAsync() - we will hide it in RootLayout instead
       }
     }
 

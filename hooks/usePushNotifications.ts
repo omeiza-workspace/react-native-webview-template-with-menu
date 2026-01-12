@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import Constants from "expo-constants";
-import { Platform } from "react-native";
 import { updateBackendPushToken } from "@/services/pushTokenService";
+import {
+  getMessaging,
+  getToken,
+  onTokenRefresh,
+  requestPermission,
+  getInitialNotification
+} from '@react-native-firebase/messaging';
+import { Platform, PermissionsAndroid } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
-/**
- * 1. Global Notification Handler
- * Standard 2026 configuration for iOS 19+ and Android 15+.
- */
 Notifications.setNotificationHandler({
   handleNotification: async (): Promise<Notifications.NotificationBehavior> => ({
     shouldShowAlert: true,
@@ -20,24 +23,22 @@ Notifications.setNotificationHandler({
 });
 
 export interface PushNotificationState {
-  expoPushToken: string | undefined;
+  fcmToken: string | undefined;
   notification: Notifications.Notification | undefined;
   requestPermissionAndRegister: () => Promise<string | undefined>;
 }
 
 export const usePushNotifications = (): PushNotificationState => {
-  const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
+  const [fcmToken, setFcmToken] = useState<string | undefined>();
   const [notification, setNotification] = useState<Notifications.Notification | undefined>();
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
-  /**
-   * 2. Internal Registration Logic
-   * Handles Android Channels, Permissions, and Token Retrieval.
-   */
-  async function registerForPushNotificationsAsync(): Promise<string | undefined> {
+  const registerForPushNotificationsAsync = useCallback(async (): Promise<string | undefined> => {
     if (!Device.isDevice || Platform.OS === 'web') return;
+
+    const messagingInstance = getMessaging(); // Initialize inside the function
 
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
@@ -46,86 +47,114 @@ export const usePushNotifications = (): PushNotificationState => {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#FF231F7C",
       });
+
+      if (Platform.Version >= 33) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
     }
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    // FIX: Changed 'messaging' to 'messagingInstance'
+    const authStatus = await requestPermission(messagingInstance);
+    const enabled = authStatus === 1 || authStatus === 2;
 
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (enabled) {
+      return await getToken(messagingInstance);
     }
+    return undefined;
+  }, []);
 
-    if (finalStatus !== "granted") return;
-
-    // Retrieve Project ID (Mandatory UUID check for 2026)
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ??
-      Constants?.easConfig?.projectId;
-
-    if (!projectId) {
-      console.error("Project ID not found. Run 'eas project:init'.");
-      return;
-    }
-
-    try {
-      const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      return token;
-    } catch (e) {
-      console.error("Token fetch error", e);
-      return undefined;
-    }
-  }
-
-  /**
-   * 3. Manual Trigger
-   * Used by UI screens (like PushPermissionScreen) to start the flow.
-   */
-  const requestPermissionAndRegister = async () => {
+  const requestPermissionAndRegister = useCallback(async () => {
     const token = await registerForPushNotificationsAsync();
     if (token) {
-      setExpoPushToken(token);
-      await updateBackendPushToken(token); // Direct sync to Laravel
+      setFcmToken(token);
+      await updateBackendPushToken(token);
     }
     return token;
-  };
+  }, [registerForPushNotificationsAsync]);
 
-  /**
-   * 4. Lifecycle Management
-   * Handles automatic sync on mount and real-time token rotation.
-   */
   useEffect(() => {
-    // A. Initial Get & Sync
-    registerForPushNotificationsAsync().then((token) => {
+    if (fcmToken) {
+      console.log("----------------------------");
+      console.log("FCM_TOKEN_DEBUG:", fcmToken);
+      console.log("----------------------------");
+    }
+  }, [fcmToken]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !Device.isDevice) return;
+
+    const messagingInstance = getMessaging();
+
+    const initialRegister = async () => {
+      const token = await registerForPushNotificationsAsync();
       if (token) {
-        setExpoPushToken(token);
-        updateBackendPushToken(token); 
+        setFcmToken(token);
+        await updateBackendPushToken(token);
+      }
+    };
+    initialRegister();
+ 
+    const unsubscribeTokenRefresh = onTokenRefresh(messagingInstance, async (newToken) => {
+      setFcmToken(newToken);
+      await updateBackendPushToken(newToken);
+    });
+
+    // Inside useEffect in usePushNotifications.ts
+    notificationListener.current = Notifications.addNotificationReceivedListener(async (notif) => {
+      setNotification(notif);
+
+      // Update the native app icon badge
+      const currentBadge = await Notifications.getBadgeCountAsync();
+      await Notifications.setBadgeCountAsync(currentBadge + 1);
+    });
+
+    // Clear badge when user opens the app
+    // const subscription = Notifications.addNotificationResponseReceivedListener(() => {
+    //   Notifications.setBadgeCountAsync(0);
+    // });
+
+
+   
+
+    // FIX: Changed 'messaging' to 'messagingInstance'
+    getInitialNotification(messagingInstance).then(async (remoteMessage) => {
+      if (remoteMessage?.data?.url) {
+        await SecureStore.setItemAsync('PENDING_DEEPLINK', remoteMessage.data.url as string);
       }
     });
 
-    // B. Token Refresh Listener
-    const tokenSubscription = Notifications.addPushTokenListener((newToken) => {
-      setExpoPushToken(newToken.data);
-      updateBackendPushToken(newToken.data); 
-    });
-
-    // C. Foreground Notification Listener
-    notificationListener.current = Notifications.addNotificationReceivedListener((notif) => {
+    notificationListener.current = Notifications.addNotificationReceivedListener(async (notif) => {
       setNotification(notif);
+      
+      // Update the native app icon badge
+      const currentBadge = await Notifications.getBadgeCountAsync();
+      await Notifications.setBadgeCountAsync(currentBadge + 1);
     });
 
-    // D. Tap/Interaction Listener
+    // Clear badge when user opens the app
+    const subscription = Notifications.addNotificationResponseReceivedListener(() => {
+      Notifications.setBadgeCountAsync(0);
+    });
+
+
+
+
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       console.log("User tapped notification:", response.notification.request.content.data);
+      
+      // Clear badge immediately on interaction
+      Notifications.setBadgeCountAsync(0);
     });
 
-    // Cleanup: 2026 standard requires calling .remove()
-    return () => {
-      tokenSubscription.remove();
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  }, []);
+    const currentNotifListener = notificationListener.current;
+    const currentResListener = responseListener.current;
 
-  return { expoPushToken, notification, requestPermissionAndRegister };
+    return () => {
+      unsubscribeTokenRefresh();
+      currentNotifListener?.remove();
+      currentResListener?.remove();
+    };
+  }, [requestPermissionAndRegister, registerForPushNotificationsAsync]);
+
+  return { fcmToken, notification, requestPermissionAndRegister };
 };

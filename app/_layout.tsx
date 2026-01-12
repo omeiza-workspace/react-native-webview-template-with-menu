@@ -1,7 +1,8 @@
+// app/_layout.tsx
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
-// import { Platform } from 'react-native'; // 1. Restore Platform
+import { useEffect, useState, useCallback } from 'react';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,36 +10,35 @@ import * as SplashScreen from 'expo-splash-screen';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useBackgroundRefresh } from '@/hooks/useBackgroundRefresh';
 import { setCurrentPushToken } from '@/utils/messageHandler';
-import useCachedResources from '@/hooks/useCachedResources'; // 2. Add resource hook
+import useCachedResources from '@/hooks/useCachedResources';
 
-// Prevent auto-hide immediately
+// Prevent auto-hide immediately to allow WebView/Auth to initialize
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const scheme = useColorScheme() ?? 'light';
   const [appIsReady, setAppIsReady] = useState(false);
   
-  // Load fonts/assets first
+  // 1. Load fonts/assets (Native requirement)
   const isLoadingComplete = useCachedResources();
   
-  // Initialize native hooks
-  const { expoPushToken } = usePushNotifications();
+  // 2. Initialize Native Firebase Hooks (Updated variable name)
+  const { fcmToken } = usePushNotifications();
   
-  // 3. Register background tasks ONLY on mobile
-  
-    useBackgroundRefresh();
-  
+  // 3. Register background tasks (cPanel friendly refresh logic)
+  useBackgroundRefresh();
 
   useEffect(() => {
     async function prepare() {
       try {
-        if (expoPushToken) {
-          setCurrentPushToken(expoPushToken);
+        // Sync the Native FCM Token with our internal bridge/utils
+        if (fcmToken) {
+          setCurrentPushToken(fcmToken);
         }
       } catch (e) {
-        console.warn('Initialization error:', e);
+        console.warn('[RootLayout] Initialization error:', e);
       } finally {
-        // 4. Set ready only if fonts are also loaded
+        // 4. Set app ready ONLY after resources and fonts are loaded
         if (isLoadingComplete) {
           setAppIsReady(true);
         }
@@ -46,35 +46,36 @@ export default function RootLayout() {
     }
 
     prepare();
-  }, [expoPushToken, isLoadingComplete]);
+  }, [fcmToken, isLoadingComplete]);
 
-  useEffect(() => {
+  const onLayoutRootView = useCallback(async () => {
     if (appIsReady) {
-      // 5. Hide splash with a slight delay if on iOS 19+ 
-      // to ensure WebView has painted its first frame
-      const timer = setTimeout(() => {
-        SplashScreen.hideAsync().catch(() => {});
-      }, 100);
-      return () => clearTimeout(timer);
+      // Small 300ms buffer allows the native view hierarchy to stabilize
+      // before we pull the curtain on the splash screen
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await SplashScreen.hideAsync();
     }
-  }, [appIsReady]);
+  }, [appIsReady]); 
 
-  // 6. Prevent rendering the Stack until fonts are loaded 
-  // to avoid "font-missing" crashes on native
+  // 6. Guard: Prevent Stack mount during resource loading
   if (!isLoadingComplete) {
     return null;
   }
 
   return (
     <SafeAreaProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { 
-            backgroundColor: Colors[scheme]?.background ?? Colors.light.background 
-          },
-        }}
-      />
+      {/* The onLayout event triggers once the View is mounted */}
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            // Match background to splash color to hide white flickering
+            contentStyle: { 
+              backgroundColor: Colors[scheme]?.background ?? Colors.light.background 
+            },
+          }}
+        />
+      </View>
     </SafeAreaProvider>
   );
 }

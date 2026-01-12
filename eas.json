@@ -12,10 +12,13 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "distribution": "store" 
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      // Store submission settings like appleId go here, NOT distribution
+    }
   }
 }

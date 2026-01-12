@@ -3,16 +3,19 @@ import { Platform } from 'react-native';
 import { APP_CONFIG } from '@/config/app';
 
 /**
- * Sends the token to Laravel. 
- * Shared by the hook (on refresh) and the layout (on login).
+ * Sends the Native FCM token to Laravel. 
+ * Updated for Direct Firebase SDK integration.
  */
 export async function updateBackendPushToken(token: string) {
+  console.log(Platform.OS)
+  // FCM does not apply to web platforms in this native configuration
   if (Platform.OS === 'web') return;
 
-  // 2026 Best Practice: Check for auth before syncing
+  // Retrieve the auth token stored during login
   const authToken = await SecureStore.getItemAsync('auth_token');
+  
   if (!authToken) {
-    console.log("No auth token found, skipping push token sync.");
+    console.log("[PushTokenService] No auth token found, skipping sync.");
     return;
   }
 
@@ -20,36 +23,59 @@ export async function updateBackendPushToken(token: string) {
     const response = await fetch(`${APP_CONFIG.API_BASE}/push-tokens`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${authToken}`,
+        'Authorization': `Bearer ${authToken}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        token: token,
-        platform: Platform.OS,
+        token: token,           // Native FCM token from messaging().getToken()
+        platform: Platform.OS,  // 'ios' or 'android'
+        guard: 'api',           // Helps Laravel identify the guard if needed
       }),
     });
 
-    if (!response.ok) throw new Error('Failed to register token on server');
-    console.log("Push token synced with Laravel successfully.");
+    // Handle 401 Unauthorized (Session expired)
+    if (response.status === 401) {
+      console.warn("[PushTokenService] Session expired, cannot sync token.");
+      return;
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.message || 'Failed to register token on server');
+    }
+
+    console.log("[PushTokenService] Token synced with Laravel successfully.");
   } catch (error) {
-    console.error("Backend token sync failed:", error);
+    console.error("[PushTokenService] Backend token sync failed:", error);
   }
 }
 
 /**
  * Removes the token from Laravel on logout.
+ * Note: If cPanel blocks DELETE, use POST with a custom route.
  */
 export async function unregisterPushToken(token: string) {
+  if (Platform.OS === 'web') return;
+
   const authToken = await SecureStore.getItemAsync('auth_token');
   if (!authToken) return;
 
-  await fetch(`${APP_CONFIG.API_BASE}/push-tokens`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ token }),
-  });
+  try {
+    const response = await fetch(`${APP_CONFIG.API_BASE}/push-tokens`, {
+      method: 'DELETE', 
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (response.ok) {
+      console.log("[PushTokenService] Token unregistered successfully.");
+    }
+  } catch (error) {
+    console.error("[PushTokenService] Failed to unregister token:", error);
+  }
 }

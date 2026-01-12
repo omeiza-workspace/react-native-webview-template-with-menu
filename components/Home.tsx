@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Linking, Platform, BackHandler } from 'react-native';
+import { View, Linking, Platform, BackHandler, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, WebViewNavigation, WebViewMessageEvent } from 'react-native-webview';
 
@@ -10,17 +10,27 @@ import { SkeletonLoader } from './SkeletonLoader';
 import { useNetwork } from '@/hooks/useNetwork';
 import { useBackendProbe } from '@/hooks/useBackendProbe';
 import { useNotificationRouting } from '@/hooks/useNotificationRouting';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+
+import { getMessaging, getToken } from '@react-native-firebase/messaging';
+import { updateBackendPushToken } from '@/services/pushTokenService';
+import * as SecureStore from 'expo-secure-store';
+import { INJECTED_JAVASCRIPT } from '@/constants/WebViewScripts';
 
 export default function Home() {
   const webViewRef = useRef<WebView | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const insets = useSafeAreaInsets();
   const isOnline = useNetwork();
   const { serverOk, retrying, retry } = useBackendProbe(isOnline);
+  
+  // 1. Hook into our Push System
+  const { notification } = usePushNotifications(); // Get the current notification state
 
   // 1. Deep Linking & Notification Routing
-  const { onWebViewLoadEnd } = useNotificationRouting(webViewRef);
+  const { onWebViewLoadEnd } = useNotificationRouting(webViewRef, isLoaded);
 
   // 2. Android Hardware Back Button Handling
   useEffect(() => {
@@ -35,12 +45,20 @@ export default function Home() {
     return () => sub.remove();
   }, [canGoBack]);
 
+   // 4. PRESERVED: Instant Bell Update (Native -> Web)
+  // When a push arrives, tell the website to refresh the bell icon immediately
+  useEffect(() => {
+    if (notification && webViewRef.current) {
+      const cmd = JSON.stringify({ type: 'REFRESH_NOTIFICATIONS' });
+      webViewRef.current.postMessage(cmd);
+      console.log("[Bridge] Triggered web notification refresh");
+    }
+  }, [notification]);
+
+
   // 3. Optimized Navigation Guard
   const onShouldStartLoadWithRequest = useCallback((request: any) => {
-    const { url, isMainFrame } = request;
-
-    // Allow assets, iframes, and background auth requests
-    if (!isMainFrame) return true;
+    const { url } = request;
 
     try {
       const allowedOrigin = new URL(APP_CONFIG.APP_URL).origin;
@@ -50,7 +68,7 @@ export default function Home() {
       if (reqUrl.origin === allowedOrigin) return true;
 
       // Handle External Links (System browser)
-      const externalSchemes = ['mailto:', 'tel:', 'sms:'];
+      const externalSchemes = ['mailto:', 'tel:', 'sms:', 'whatsapp:'];
       if (externalSchemes.some(scheme => url.startsWith(scheme))) {
         Linking.openURL(url).catch((_err) => console.warn('Could not open scheme', _err));
         return false;
@@ -69,11 +87,31 @@ export default function Home() {
   }, []);
 
   // 4. JS Bridge Message Handler
-  const onMessage = (event: WebViewMessageEvent) => {
+  const onMessage = async (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+
       if (data.type === 'OPEN_EXTERNAL' && data.url) {
-        Linking.openURL(data.url).catch((_err) => {});
+        Linking.openURL(data.url).catch((_err) => { });
+      }
+
+      if (data.type === 'AUTH_SUCCESS') {
+        // Save to SecureStore immediately
+        const apiToken = data.payload.token;
+        await SecureStore.setItemAsync('auth_token', apiToken);
+
+        // NOW the "No auth token found" error will disappear!
+        console.log("Token saved! Syncing FCM now...");
+        const messaging = getMessaging();
+        const fcmToken = await getToken(messaging);
+        await updateBackendPushToken(fcmToken);
+      }
+
+      // Updated to 2026 Modular Firebase Syntax
+      if (data.type === 'SYNC_PUSH_TOKEN') {
+        const messaging = getMessaging();
+        const token = await getToken(messaging);
+        await updateBackendPushToken(token);
       }
     } catch (e) {
       console.warn('Bridge message parsing error', e);
@@ -92,6 +130,17 @@ export default function Home() {
   // 6. Navigation State Change
   const onNavigationStateChange = (navState: WebViewNavigation) => {
     setCanGoBack(navState.canGoBack);
+
+    // Log the URL whenever it changes to catch the 404 target
+    console.log("----------------------------");
+    console.log("WEBVIEW_CURRENT_URL:", navState.url);
+    console.log("----------------------------");
+  };
+
+
+  const handleLoadEnd = () => {
+    setIsLoaded(true);
+    onWebViewLoadEnd();
   };
 
   // 7. Initial Loading & Offline States
@@ -125,11 +174,11 @@ export default function Home() {
         source={{ uri: APP_CONFIG.APP_URL }}
         style={webViewStyles.webView}
         cacheEnabled={true}
-        userAgent={`GefixApp-${Platform.OS}-2026`} 
+        userAgent={`GefixApp-${Platform.OS}-2026`}
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState={true}
-        onLoadEnd={onWebViewLoadEnd}
+        onLoadEnd={handleLoadEnd}
         renderLoading={() => <SkeletonLoader />}
         onMessage={onMessage}
         onNavigationStateChange={onNavigationStateChange}
@@ -137,48 +186,15 @@ export default function Home() {
 
 
         onError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.warn('WebView error: ', nativeEvent);
-            // Alert the error description for immediate debugging on device
-            alert(`Load Failed: ${nativeEvent.description}`);
+          const { nativeEvent } = syntheticEvent;
+          console.warn('WebView error: ', nativeEvent);
+          // Alert the error description for immediate debugging on device
+          // alert(`Load Failed: ${nativeEvent.description}`);
+          Alert.alert('Load Failed', nativeEvent.description);
         }}
-        
-        injectedJavaScriptBeforeContentLoaded={`
-          (function() {
-            var appOrigin = "${new URL(APP_CONFIG.APP_URL).origin}";
-            if (window.location.origin !== appOrigin && window.location.origin !== 'null') return;
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                    registration.unregister();
-                    }
-                });
-            }
-                
-            window.isNativeApp = true;
-            window.GEFIX = {
-              postMessage: function(data) {
-                window.ReactNativeWebView.postMessage(JSON.stringify(data));
-              }
-            };
+        injectedJavaScriptBeforeContentLoaded={INJECTED_JAVASCRIPT}
 
-            document.addEventListener('click', function(e) {
-              const a = e.target.closest('a');
-              if (a && a.href) {
-                const isExternal = !a.href.startsWith(appOrigin);
-                const isNewTab = a.target === '_blank';
-                if (isExternal || isNewTab) {
-                  e.preventDefault();
-                  window.GEFIX.postMessage({ type: 'OPEN_EXTERNAL', url: a.href });
-                }
-              }
-            }, true);
-          })();
-          true;
-        `}
-        
-        // 2026 Best Practices
         allowsBackForwardNavigationGestures={true}
         pullToRefreshEnabled={true}
         sharedCookiesEnabled={true}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -7,8 +7,8 @@ import { APP_CONFIG } from '@/config/app';
 
 const PENDING_DEEPLINK_KEY = 'PENDING_DEEPLINK';
 
-export function useNotificationRouting(webViewRef: React.RefObject<WebView | null>) {
-  const [isWebViewLoaded, setIsWebViewLoaded] = useState(false);
+export function useNotificationRouting(webViewRef: React.RefObject<WebView | null>, isWebViewLoaded: boolean) {
+  // const [isWebViewLoaded, setIsWebViewLoaded] = useState(false);
 
   // 1. FIX: Call the hook UNCONDITIONALLY at the top level
   // This satisfies the Rules of Hooks. 
@@ -58,9 +58,9 @@ export function useNotificationRouting(webViewRef: React.RefObject<WebView | nul
     replay();
   }, [isWebViewLoaded, webViewRef]);
 
-  const onWebViewLoadEnd = () => setIsWebViewLoaded(true);
+  // const onWebViewLoadEnd = () => setIsWebViewLoaded(true);
 
-  return { onWebViewLoadEnd };
+  return { onWebViewLoadEnd: () => {} };
 }
 
 // Helpers
